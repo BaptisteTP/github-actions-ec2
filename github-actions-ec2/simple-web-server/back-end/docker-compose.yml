@@ -1,0 +1,70 @@
+services:
+  # --- Base de données pour user-service
+  user-db:
+    image: mongo:6.0
+    container_name: user-db
+    restart: always
+    volumes:
+      - user-db-data:/data/db
+    ports:
+      - "27017:27017"        # Expose le port 27017 pour tests locaux
+
+  # --- Base de données pour content-service
+  content-db:
+    image: mongo:6.0
+    container_name: content-db
+    restart: always
+    volumes:
+      - content-db-data:/data/db
+    ports:
+      - "27018:27017"        # Mappe le port interne 27017 sur l'hôte 27018
+
+  # --- Micro-service Utilisateurs
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: on-failure
+    env_file:
+      - ./user-service/.env   # tu peux définir PORT=4001 ici
+    environment:
+      # Surcharge ou confirmation de la connexion Mongo
+      MONGO_URI: mongodb://user-db:27017/breezyUserDb
+    ports:
+      - "4001:4001"
+    depends_on:
+      - user-db
+
+  # --- Micro-service Contenu
+  content-service:
+    build:
+      context: ./content-service
+      dockerfile: Dockerfile
+    container_name: content-service
+    restart: on-failure
+    env_file:
+      - ./content-service/.env  # définis PORT=4002 dans ce .env
+    environment:
+      MONGO_URI: mongodb://content-db:27017/breezyContentDb
+    ports:
+      - "4002:4002"
+    depends_on:
+      - content-db
+      - user-service
+
+# --- API Gateway (NGINX)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "80:80"                # expose le port 80 pour tout l'API
+    depends_on:
+      - user-service
+      - content-service
+
+volumes:
+  user-db-data:
+  content-db-data:
